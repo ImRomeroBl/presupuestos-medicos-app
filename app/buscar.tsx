@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { useContext, useState } from 'react';
+import { useState } from 'react';
 
 import {
   Alert,
@@ -11,14 +11,17 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { PresupuestoContext } from '../src/context/PresupuestoContext';
+import { usePresupuesto } from '../src/context/PresupuestoContext';
+import { calcularTotal } from '../src/domain/calculos';
+import { formatCurrency } from '../src/lib/currency';
+import type { Presupuesto } from '../src/types';
 
 export default function Buscar() {
 
-  const { presupuestos, eliminarPresupuesto,setEditandoId, setPaciente, setTratamientos } = useContext(PresupuestoContext);
+  const { presupuestos, eliminarPresupuesto,setEditandoId, setPaciente, setTratamientos } = usePresupuesto();
   const [busqueda, setBusqueda] = useState('');
 
-  const filtrados = presupuestos.filter((p: any) =>
+  const filtrados = presupuestos.filter((p) =>
     p.paciente.nombre.toLowerCase().includes(busqueda.toLowerCase())
   );
 
@@ -44,7 +47,7 @@ export default function Buscar() {
       ]
     );
   };
-         const editarPresupuesto = (item: any) => {
+         const editarPresupuesto = (item: Presupuesto) => {
           setPaciente(item.paciente);
           setTratamientos(item.tratamientos);
           setEditandoId(item.id); // 🔥 clave
@@ -67,16 +70,16 @@ export default function Buscar() {
 
       <FlatList
         data={filtrados}
-        keyExtractor={(item: any) => item.id}
+        keyExtractor={(item) => item.id}
         ListEmptyComponent={<Text>No hay resultados</Text>}
 
 
-        renderItem={({ item }: any) => (
+        renderItem={({ item }) => (
           <View style={styles.item}>
 
             <TouchableOpacity onPress={() => abrirPDF(item.pdf)}>
               <Text style={styles.name}>{item.paciente.nombre}</Text>
-              <Text style={styles.total}>${item.total} mxn</Text>
+              <Text style={styles.total}>${formatCurrency(calcularTotal(item.tratamientos))} mxn</Text>
               <Text style={styles.date}>{item.fecha}</Text>
             </TouchableOpacity>
 

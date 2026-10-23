@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -12,19 +12,20 @@ import {
 } from 'react-native';
 
 import GradientButton from '../components/ui/custom/GradientButton';
-import { PresupuestoContext } from '../src/context/PresupuestoContext';
+import { usePresupuesto } from '../src/context/PresupuestoContext';
 
 export default function Editar() {
 
-  const { id } = useLocalSearchParams();
-  const { tratamientos, setTratamientos } = useContext(PresupuestoContext);
+  const { id: idParam } = useLocalSearchParams();
+  const id = Array.isArray(idParam) ? idParam[0] : idParam;
+  const { tratamientos, setTratamientos } = usePresupuesto();
 
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [precio, setPrecio] = useState('');
 
   useEffect(() => {
-    const t = tratamientos.find((t: any) => t.id === id);
+    const t = tratamientos.find((tratamiento) => tratamiento.id === id);
     if (t) {
       setNombre(t.nombre || '');
       setDescripcion(t.descripcion || '');
@@ -33,7 +34,7 @@ export default function Editar() {
   }, [id, tratamientos]);
 
   const guardar = () => {
-    const nuevos = tratamientos.map((t: any) =>
+    const nuevos = tratamientos.map((t) =>
       t.id === id
         ? { ...t, nombre, descripcion, precio: Number(precio) }
         : t

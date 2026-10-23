@@ -15,11 +15,17 @@ const GLOW_TRANSITION = {
   duration: 200,
 } as MotiTransitionProp;
 
+interface GradientButtonProps {
+  title: string;
+  onPress: () => void;
+  secondary?: boolean;
+}
+
 export default function GradientButton({
   title,
   onPress,
   secondary = false
-}: any) {
+}: GradientButtonProps) {
   const [pressed, setPressed] = useState(false);
 
   // 🎨 colores dinámicos

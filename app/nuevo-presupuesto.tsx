@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useContext, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   Alert,
   Animated,
@@ -13,11 +13,11 @@ import {
 } from 'react-native';
 
 import GradientButton from '../components/ui/custom/GradientButton';
-import { PresupuestoContext } from '../src/context/PresupuestoContext';
+import { usePresupuesto } from '../src/context/PresupuestoContext';
+import { validarPaciente } from '../src/domain/validaciones';
 
 export default function NuevoPresupuesto() {
-  const { paciente, setPaciente, resetPresupuesto } =
-    useContext(PresupuestoContext);
+  const { paciente, setPaciente, resetPresupuesto } = usePresupuesto();
 
   // IMPORTANTE: useRef para evitar recrear animación
   const animatedBorder = useRef(new Animated.Value(0)).current;
@@ -41,7 +41,7 @@ export default function NuevoPresupuesto() {
   });
 
   const continuar = () => {
-    if (!paciente.nombre || !paciente.edad) {
+    if (validarPaciente(paciente)) {
       Alert.alert('Error', 'Completa todos los campos');
       return;
     }

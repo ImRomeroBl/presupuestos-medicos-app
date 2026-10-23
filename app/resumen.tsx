@@ -3,12 +3,21 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { useContext, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { PresupuestoContext } from '../src/context/PresupuestoContext';
+import { CLINICA } from '../src/config/clinic';
+import { usePresupuesto } from '../src/context/PresupuestoContext';
+import { calcularTotales } from '../src/domain/calculos';
+import { validarPresupuesto, type ErrorValidacion } from '../src/domain/validaciones';
+import { formatCurrency } from '../src/lib/currency';
+import { formatDate } from '../src/lib/date';
 
-const CLINICA = "CONSULTORIO DENTAL";
-const DOCTORA = "DRA. MA. DEL ROCIO BLANCO GARCIA";
+const MENSAJES_ERROR: Record<ErrorValidacion, string> = {
+  'paciente-incompleto': 'Faltan datos del paciente',
+  'sin-tratamientos': 'Agrega al menos un tratamiento',
+  'sin-tratamientos-validos': 'Agrega tratamientos válidos',
+  'total-invalido': 'El total debe ser mayor a 0',
+};
 
 const getBase64Logo = async () => {
   try {
@@ -28,12 +37,11 @@ const getBase64Logo = async () => {
 
 export default function Resumen() {
 
-  const { paciente, tratamientos, guardarPresupuesto } = useContext(PresupuestoContext);
+  const { paciente, tratamientos, guardarPresupuesto, resetPresupuesto } = usePresupuesto();
   const params = useLocalSearchParams();
   
   const yaListo = params.listo === 'true';
   const [pdfGenerado, setPdfGenerado] = useState(yaListo);
-  const { resetPresupuesto } = useContext(PresupuestoContext);
   const [pdfUri, setPdfUri] = useState<string | null>(null);
   const generacionIniciada = useRef(false);
 
@@ -42,45 +50,16 @@ const generarPDF = useCallback(async () => {
 
     console.log('1. Iniciando generación');
 
-    //  VALIDACIÓN PACIENTE
-    if (!paciente?.nombre || !paciente?.edad) {
-      Alert.alert('Error', 'Faltan datos del paciente');
+    const error = validarPresupuesto(paciente, tratamientos);
+    if (error) {
+      Alert.alert('Error', MENSAJES_ERROR[error]);
       return;
     }
 
-    //  VALIDACIÓN TRATAMIENTOS
-    if (!tratamientos || tratamientos.length === 0) {
-      Alert.alert('Error', 'Agrega al menos un tratamiento');
-      return;
-    }
-
-    //  FILTRAR TRATAMIENTOS VÁLIDOS
-    const tratamientosValidos = tratamientos.filter(
-      (t: any) => t.nombre && Number(t.precio) > 0
-    );
-
-    if (tratamientosValidos.length === 0) {
-      Alert.alert('Error', 'Agrega tratamientos válidos');
-      return;
-    }
-
-    //  TOTAL SEGURO
-    const total = tratamientosValidos.reduce(
-      (acc: number, t: any) => acc + Number(t.precio || 0),
-      0
-    );
-
-    if (total <= 0) {
-      Alert.alert('Error', 'El total debe ser mayor a 0');
-      return;
-    }
+    const { tratamientosValidos, total } = calcularTotales(tratamientos);
 
     const logoBase64 = await getBase64Logo();
     console.log('2. Logo cargado');
-
-    //  FORMATO DE MONEDA
-    const formatCurrency = (value: number) =>
-      value.toLocaleString('es-MX');
 
     const html = `
 <html>
@@ -208,8 +187,8 @@ body {
 
 <div class="header">
   <div class="header-text">
-    <div class="clinica">${CLINICA}</div>
-    <div class="doctora">${DOCTORA}</div>
+    <div class="clinica">${CLINICA.nombre}</div>
+    <div class="doctora">${CLINICA.doctora}</div>
   </div>
   <img class="logo" src="${logoBase64}" />
 </div>
@@ -220,7 +199,7 @@ body {
     &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Edad:</b> ${paciente.edad}
     &nbsp;&nbsp;|&nbsp;&nbsp;
-    <b>Fecha:</b> ${new Date().toLocaleDateString()}
+    <b>Fecha:</b> ${formatDate()}
   </div>
 </div>
 
@@ -230,7 +209,7 @@ body {
   <th>Costo</th>
 </tr>
 
-${tratamientosValidos.map((t: any) => `
+${tratamientosValidos.map((t) => `
 <tr>
   <td>
     <b>${t.nombre}</b>
@@ -239,7 +218,7 @@ ${tratamientosValidos.map((t: any) => `
     </div>
   </td>
   <td class="precio">
-    $${formatCurrency(Number(t.precio))} MXN
+    $${formatCurrency(t.precio)} MXN
   </td>
 </tr>
 `).join('')}
@@ -324,14 +303,7 @@ ${tratamientosValidos.map((t: any) => `
     }, [generarPDF]);
 
 
-      const total = tratamientos.reduce(
-        (acc: number, t: any) => acc + Number(t.precio || 0),
-        0
-      );
-
-      const formatCurrency = (value: number) => {
-        return value.toLocaleString('es-MX');
-      };
+      const { total } = calcularTotales(tratamientos);
 return (
   <View style={styles.container}>
 

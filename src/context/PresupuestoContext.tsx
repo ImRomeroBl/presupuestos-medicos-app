@@ -1,17 +1,37 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useCallback, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 
-export const PresupuestoContext = createContext<any>(null);
+import { calcularTotal } from '../domain/calculos';
+import { formatDate } from '../lib/date';
+import type {
+  Paciente,
+  Presupuesto,
+  PresupuestoContextValue,
+  Tratamiento,
+} from '../types';
 
-export function PresupuestoProvider({ children }: any) {
+export const PresupuestoContext = createContext<PresupuestoContextValue | null>(null);
 
-  const [paciente, setPaciente] = useState({
+export function usePresupuesto(): PresupuestoContextValue {
+  const contexto = useContext(PresupuestoContext);
+
+  if (!contexto) {
+    throw new Error('usePresupuesto debe usarse dentro de PresupuestoProvider');
+  }
+
+  return contexto;
+}
+
+export function PresupuestoProvider({ children }: { children: ReactNode }) {
+
+  const [paciente, setPaciente] = useState<Paciente>({
     nombre: '',
     edad: ''
   });
 
-  const [tratamientos, setTratamientos] = useState<any[]>([]);
-  const [presupuestos, setPresupuestos] = useState<any[]>([]);
+  const [tratamientos, setTratamientos] = useState<Tratamiento[]>([]);
+  const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [editandoId, setEditandoId] = useState<string | null>(null);
 
   // 🔹 CARGAR AL INICIAR
@@ -23,7 +43,10 @@ export function PresupuestoProvider({ children }: any) {
     try {
       const data = await AsyncStorage.getItem('presupuestos');
       if (data) {
-        setPresupuestos(JSON.parse(data));
+        const parsed: unknown = JSON.parse(data);
+        if (Array.isArray(parsed)) {
+          setPresupuestos(parsed as Presupuesto[]);
+        }
       }
     } catch (error) {
       console.log('Error cargando datos', error);
@@ -35,7 +58,7 @@ export function PresupuestoProvider({ children }: any) {
     guardarEnStorage(presupuestos);
   }, [presupuestos]);
 
-  const guardarEnStorage = async (data: any) => {
+  const guardarEnStorage = async (data: Presupuesto[]) => {
     try {
       await AsyncStorage.setItem('presupuestos', JSON.stringify(data));
     } catch (error) {
@@ -48,25 +71,23 @@ export function PresupuestoProvider({ children }: any) {
     setTratamientos([]);
   }, []);
 
-  // 🔥 GUARDAR / ACTUALIZAR PRESUPUESTO (CORREGIDO)
+  // 🔥 GUARDAR / ACTUALIZAR PRESUPUESTO
   const guardarPresupuesto = (pdfUri: string) => {
 
-    const total = tratamientos.reduce(
-      (acc, t) => acc + Number(t.precio || 0),
-      0
-    );
+    // Solo los tratamientos válidos participan en el total.
+    const total = calcularTotal(tratamientos);
 
     // 🔍 BUSCAR SI YA EXISTE ESTE PACIENTE
     const existente = presupuestos.find(
       (p) => p.paciente.nombre === paciente.nombre
     );
 
-    const nuevo = {
+    const nuevo: Presupuesto = {
       id: existente?.id || Date.now().toString(),
       paciente,
       tratamientos,
       total,
-      fecha: new Date().toLocaleDateString(),
+      fecha: formatDate(),
       pdf: pdfUri
     };
 
@@ -83,8 +104,7 @@ export function PresupuestoProvider({ children }: any) {
 
   // 🔥 ELIMINAR PRESUPUESTO
   const eliminarPresupuesto = (id: string) => {
-    const filtrados = presupuestos.filter(p => p.id !== id);
-    setPresupuestos(filtrados);
+    setPresupuestos(prev => prev.filter(p => p.id !== id));
   };
 
   return (

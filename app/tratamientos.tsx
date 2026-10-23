@@ -1,23 +1,22 @@
 import { router } from 'expo-router';
-import { useContext } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import GradientButton from '../components/ui/custom/GradientButton';
-import { PresupuestoContext } from '../src/context/PresupuestoContext';
+import { usePresupuesto } from '../src/context/PresupuestoContext';
+import type { Tratamiento } from '../src/types';
 
 export default function Tratamientos() {
 
-  const { tratamientos, setTratamientos } = useContext(PresupuestoContext);
-  const { paciente } = useContext(PresupuestoContext);
+  const { tratamientos, setTratamientos, paciente } = usePresupuesto();
 
   const agregar = () => {
-    const nuevo = {
+    const nuevo: Tratamiento = {
       id: Date.now().toString(),
       nombre: '',
       descripcion: '',
       precio: 0
     };
 
-    setTratamientos([...(tratamientos ?? []), nuevo]);
+    setTratamientos([...tratamientos, nuevo]);
 
     router.push({
       pathname: '/editar-tratamiento',
@@ -25,7 +24,7 @@ export default function Tratamientos() {
     });
   };
 
-  if (!paciente?.nombre) {
+  if (!paciente.nombre) {
     return null;
   }
 
@@ -46,8 +45,8 @@ export default function Tratamientos() {
       {/* LISTA (ocupa el espacio disponible) */}
       <View style={{ flex: 1 }}>
         <FlatList
-          data={tratamientos ?? []}
-          keyExtractor={(item: any) => item.id}
+          data={tratamientos}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={{
             paddingTop: 10,
             paddingBottom: 20,
@@ -57,7 +56,7 @@ export default function Tratamientos() {
               No hay tratamientos aún
             </Text>
           }
-          renderItem={({ item }: any) => (
+          renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.item}
               onPress={() =>
