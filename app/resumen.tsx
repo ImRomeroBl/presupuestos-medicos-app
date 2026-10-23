@@ -1,16 +1,16 @@
-import { Asset } from 'expo-asset';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Print from 'expo-print';
 import { router, useLocalSearchParams } from 'expo-router';
-import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
 import { CLINICA } from '../src/config/clinic';
 import { usePresupuesto } from '../src/context/PresupuestoContext';
 import { calcularTotales } from '../src/domain/calculos';
 import { validarPresupuesto, type ErrorValidacion } from '../src/domain/validaciones';
 import { formatCurrency } from '../src/lib/currency';
-import { formatDate } from '../src/lib/date';
+import { buildPresupuestoHtml } from '../src/services/pdf/buildPresupuestoHtml';
+import { generatePresupuestoPdf } from '../src/services/pdf/generatePresupuestoPdf';
+import { getLogoDataUri } from '../src/services/pdf/getLogoDataUri';
+import { sharePresupuestoPdf } from '../src/services/pdf/sharePresupuestoPdf';
 
 const MENSAJES_ERROR: Record<ErrorValidacion, string> = {
   'paciente-incompleto': 'Faltan datos del paciente',
@@ -19,291 +19,89 @@ const MENSAJES_ERROR: Record<ErrorValidacion, string> = {
   'total-invalido': 'El total debe ser mayor a 0',
 };
 
-const getBase64Logo = async () => {
-  try {
-    const asset = Asset.fromModule(require('../assets/images/logo.png'));
-    await asset.downloadAsync();
-
-    const base64 = await FileSystem.readAsStringAsync(asset.localUri!, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    return `data:image/png;base64,${base64}`;
-  } catch (error) {
-    console.log('Error logo:', error);
-    return '';
-  }
-};
-
 export default function Resumen() {
 
   const { paciente, tratamientos, guardarPresupuesto, resetPresupuesto } = usePresupuesto();
   const params = useLocalSearchParams();
-  
+
   const yaListo = params.listo === 'true';
   const [pdfGenerado, setPdfGenerado] = useState(yaListo);
   const [pdfUri, setPdfUri] = useState<string | null>(null);
   const generacionIniciada = useRef(false);
 
-const generarPDF = useCallback(async () => {
-  try {
+  const generarPDF = useCallback(async (): Promise<string | null> => {
+    try {
+      const error = validarPresupuesto(paciente, tratamientos);
+      if (error) {
+        Alert.alert('Error', MENSAJES_ERROR[error]);
+        return null;
+      }
 
-    console.log('1. Iniciando generación');
+      const { tratamientosValidos, total } = calcularTotales(tratamientos);
+      const logoDataUri = await getLogoDataUri();
 
-    const error = validarPresupuesto(paciente, tratamientos);
-    if (error) {
-      Alert.alert('Error', MENSAJES_ERROR[error]);
-      return;
+      const html = buildPresupuestoHtml({
+        paciente,
+        tratamientosValidos,
+        total,
+        clinica: CLINICA,
+        logoDataUri,
+        fecha: new Date(),
+      });
+
+      const { uri } = await generatePresupuestoPdf({
+        html,
+        patientName: paciente.nombre,
+      });
+
+      setPdfUri(uri);
+      setPdfGenerado(true);
+
+      return uri;
+    } catch (error) {
+      console.log('ERROR REAL PDF:', error);
+      Alert.alert('Error', 'No se pudo generar el PDF');
+      return null;
     }
+  }, [paciente, tratamientos]);
 
-    const { tratamientosValidos, total } = calcularTotales(tratamientos);
+  const compartirPDF = async () => {
+    try {
+      const resultado = await sharePresupuestoPdf(pdfUri);
 
-    const logoBase64 = await getBase64Logo();
-    console.log('2. Logo cargado');
+      if (resultado === 'missing-uri') {
+        Alert.alert('Error', 'Primero genera el PDF');
+        return;
+      }
 
-    const html = `
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
+      if (resultado === 'not-found') {
+        Alert.alert('Error', 'El archivo no existe');
+        return;
+      }
+    } catch (error) {
+      console.log('💥 ERROR SHARE:', error);
+      Alert.alert('Error', 'No se pudo compartir');
+    }
+  };
 
-body {
-  font-family: Arial, sans-serif;
-  background: #f4f6f9;
-  padding: 15px; /* menos espacio */
-  color: #111827;
-}
+  useEffect(() => {
+    if (generacionIniciada.current) return;
+    generacionIniciada.current = true;
 
-/*  HEADER */
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: linear-gradient(135deg, #1e3a8a, #38bdf8);
-  color: white;
-  padding: 18px 22px; /*  más compacto */
-  border-radius: 14px;
-}
+    const generarYGuardar = async () => {
+      const uri = await generarPDF();
 
-.header-text {
-  flex: 1;
-  text-align: center;
-}
+      if (uri) {
+        // La persistencia es una decisión de la pantalla, no del servicio PDF.
+        guardarPresupuesto(uri);
+      }
+    };
 
-.logo {
-  width: 75px;
-  height: 75px;
-  object-fit: contain;
-}
+    generarYGuardar();
+  }, [generarPDF, guardarPresupuesto]);
 
-.clinica {
-  font-size: 26px;
-  font-weight: bold;
-}
+  const { total } = calcularTotales(tratamientos);
 
-.doctora {
-  font-size: 16px;
-  margin-top: 4px;
-  opacity: 0.9;
-}
-
-/* INFO COMPACTA */
-.info {
-  margin-top: 15px;
-  background: white;
-  padding: 12px;
-  border-radius: 10px;
-}
-
-.info-line {
-  font-size: 16px;
-}
-
-/* TABLA */
-.table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  margin-top: 15px;
-  background: white;
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.table th {
-  background: #1e3a8a;
-  color: white;
-  padding: 10px;
-  text-align: left;
-  font-size: 13px;
-}
-
-.table th:last-child {
-  text-align: right;
-}
-
-.table td {
-  padding: 10px 12px; /* 🔥 menos altura */
-  border-bottom: 1px solid #e5e7eb;
-  vertical-align: middle; /* 🔥 centra precio */
-  word-break: break-word;
-}
-
-/*  DESCRIPCIÓN */
-.descripcion {
-  margin-top: 3px;
-  color: #4b5563;
-  max-width: 85%;
-  line-height: 1.3;
-  font-size: 13px;
-}
-
-/*  PRECIO PERFECTO */
-.precio {
-  text-align: right;
-  font-weight: bold;
-  color: #1d4ed8;
-  white-space: nowrap;
-  vertical-align: middle;
-  font-size: 14px;
-}
-
-/*  TOTAL COMPACTO */
-.total {
-  margin-top: 15px;
-  background: linear-gradient(90deg, #2563eb, #38bdf8);
-  color: white;
-  padding: 14px; /*  reducido */
-  border-radius: 12px;
-  text-align: right; /* 🔥 estilo más pro */
-  font-size: 16px;
-  font-weight: bold;
-}
-
-</style>
-</head>
-
-<body>
-
-<div class="header">
-  <div class="header-text">
-    <div class="clinica">${CLINICA.nombre}</div>
-    <div class="doctora">${CLINICA.doctora}</div>
-  </div>
-  <img class="logo" src="${logoBase64}" />
-</div>
-
-<div class="info">
-  <div class="info-line">
-    <b>Paciente:</b> ${paciente.nombre}
-    &nbsp;&nbsp;|&nbsp;&nbsp;
-    <b>Edad:</b> ${paciente.edad}
-    &nbsp;&nbsp;|&nbsp;&nbsp;
-    <b>Fecha:</b> ${formatDate()}
-  </div>
-</div>
-
-<table class="table">
-<tr>
-  <th>Tratamiento</th>
-  <th>Costo</th>
-</tr>
-
-${tratamientosValidos.map((t) => `
-<tr>
-  <td>
-    <b>${t.nombre}</b>
-    <div class="descripcion">
-      ${t.descripcion || ''}
-    </div>
-  </td>
-  <td class="precio">
-    $${formatCurrency(t.precio)} MXN
-  </td>
-</tr>
-`).join('')}
-
-</table>
-
-<div class="total">
-  TOTAL: $${formatCurrency(total)} MXN
-</div>
-
-</body>
-</html>
-`;;
-
-    const { uri } = await Print.printToFileAsync({ html });
-
-    console.log('3. PDF creado en:', uri);
-
-    // NOMBRE SEGURO y unico
-    const nombreLimpio = (paciente.nombre || 'paciente')
-      .replace(/\s+/g, '_')
-      .replace(/[^a-zA-Z0-9_]/g, '');
-
-    const timestamp = Date.now();
-
-    const nuevoUri =
-      FileSystem.documentDirectory +
-      `Presupuesto_${nombreLimpio}_${timestamp}.pdf`;
-
-    console.log('4. Ruta destino:', nuevoUri);
-
-    // ELIMINAMOS deleteAsync → YA NO SE SOBREESCRIBE
-
-    await FileSystem.copyAsync({
-      from: uri,
-      to: nuevoUri
-    });
-
-    console.log('5. PDF generado correctamente');
-
-    guardarPresupuesto(nuevoUri);
-    setPdfUri(nuevoUri);
-    setPdfGenerado(true);
-
-  } catch (error) {
-    console.log('ERROR REAL PDF:', error);
-    Alert.alert('Error', 'No se pudo generar el PDF');
-  }
-}, [paciente, tratamientos, guardarPresupuesto]);
-
-      const compartirPDF = async () => {
-        try {
-          console.log('Intentando compartir:', pdfUri);
-
-          if (!pdfUri) {
-            Alert.alert('Error', 'Primero genera el PDF');
-            return;
-          }
-
-          const existe = await FileSystem.getInfoAsync(pdfUri);
-          console.log('Archivo existe:', existe);
-
-          if (!existe.exists) {
-            Alert.alert('Error', 'El archivo no existe');
-            return;
-          }
-
-          await Sharing.shareAsync(pdfUri);
-
-        } catch (error) {
-          console.log('💥 ERROR SHARE:', error);
-          Alert.alert('Error', 'No se pudo compartir');
-        }
-      };
-      
-
-   
-    useEffect(() => {
-      if (generacionIniciada.current) return;
-      generacionIniciada.current = true;
-      generarPDF();
-    }, [generarPDF]);
-
-
-      const { total } = calcularTotales(tratamientos);
 return (
   <View style={styles.container}>
 
@@ -450,5 +248,3 @@ buttons: {
 },
 
 });
-
-

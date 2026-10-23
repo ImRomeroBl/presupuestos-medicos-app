@@ -5,6 +5,13 @@ export interface Paciente {
   edad: string;
 }
 
+export interface Clinica {
+  nombre: string;
+  doctora: string;
+  direccion: string;
+  telefono: string;
+}
+
 export interface Tratamiento {
   id: string;
   nombre: string;

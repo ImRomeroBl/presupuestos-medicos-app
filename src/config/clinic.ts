@@ -1,3 +1,5 @@
+import type { Clinica } from '../types';
+
 /**
  * Datos de la clínica usados en la app y en el membrete del PDF.
  * `direccion` y `telefono` quedan preparados para cuando la clínica los configure;
@@ -8,4 +10,4 @@ export const CLINICA = {
   doctora: 'DRA. MA. DEL ROCIO BLANCO GARCIA',
   direccion: '',
   telefono: '',
-} as const;
+} as const satisfies Clinica;
