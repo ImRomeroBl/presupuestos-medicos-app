@@ -5,7 +5,6 @@ export default function Layout() {
   return (
     <PresupuestoProvider>
       <Stack
-        initialRouteName="index"
         screenOptions={{
           headerShown: false,   
           headerBackVisible: false,

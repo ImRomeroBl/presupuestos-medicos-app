@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useEffect, useState } from 'react';
 
 export const PresupuestoContext = createContext<any>(null);
 
@@ -43,10 +43,10 @@ export function PresupuestoProvider({ children }: any) {
     }
   };
 
-  const resetPresupuesto = () => {
+  const resetPresupuesto = useCallback(() => {
     setPaciente({ nombre: '', edad: '' });
     setTratamientos([]);
-  };
+  }, []);
 
   // 🔥 GUARDAR / ACTUALIZAR PRESUPUESTO (CORREGIDO)
   const guardarPresupuesto = (pdfUri: string) => {

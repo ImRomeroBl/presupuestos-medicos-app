@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import {
   Alert,
   Animated,
@@ -19,15 +19,13 @@ export default function NuevoPresupuesto() {
   const { paciente, setPaciente, resetPresupuesto } =
     useContext(PresupuestoContext);
 
-  const [focusedInput, setFocusedInput] = useState('');
-
   // IMPORTANTE: useRef para evitar recrear animación
   const animatedBorder = useRef(new Animated.Value(0)).current;
 
   // Limpia todo al entrar (nuevo paciente)
   useEffect(() => {
     resetPresupuesto();
-  }, []);
+  }, [resetPresupuesto]);
 
   const animateFocus = (toValue: number) => {
     Animated.timing(animatedBorder, {
@@ -74,11 +72,9 @@ export default function NuevoPresupuesto() {
               placeholder="Ej: Juan Pérez"
               value={paciente.nombre}
               onFocus={() => {
-                setFocusedInput('nombre');
                 animateFocus(1);
               }}
               onBlur={() => {
-                setFocusedInput('');
                 animateFocus(0);
               }}
               onChangeText={(text) =>
@@ -99,11 +95,9 @@ export default function NuevoPresupuesto() {
               keyboardType="numeric"
               value={paciente.edad}
               onFocus={() => {
-                setFocusedInput('edad');
                 animateFocus(1);
               }}
               onBlur={() => {
-                setFocusedInput('');
                 animateFocus(0);
               }}
               onChangeText={(text) =>

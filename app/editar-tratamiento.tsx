@@ -30,7 +30,7 @@ export default function Editar() {
       setDescripcion(t.descripcion || '');
       setPrecio(t.precio ? t.precio.toString() : '');
     }
-  }, [id]);
+  }, [id, tratamientos]);
 
   const guardar = () => {
     const nuevos = tratamientos.map((t: any) =>

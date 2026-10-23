@@ -3,12 +3,28 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { PresupuestoContext } from '../src/context/PresupuestoContext';
 
+const CLINICA = "CONSULTORIO DENTAL";
+const DOCTORA = "DRA. MA. DEL ROCIO BLANCO GARCIA";
 
+const getBase64Logo = async () => {
+  try {
+    const asset = Asset.fromModule(require('../assets/images/logo.png'));
+    await asset.downloadAsync();
 
+    const base64 = await FileSystem.readAsStringAsync(asset.localUri!, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    return `data:image/png;base64,${base64}`;
+  } catch (error) {
+    console.log('Error logo:', error);
+    return '';
+  }
+};
 
 export default function Resumen() {
 
@@ -19,31 +35,9 @@ export default function Resumen() {
   const [pdfGenerado, setPdfGenerado] = useState(yaListo);
   const { resetPresupuesto } = useContext(PresupuestoContext);
   const [pdfUri, setPdfUri] = useState<string | null>(null);
-  
+  const generacionIniciada = useRef(false);
 
-  const CLINICA = "CONSULTORIO DENTAL";
-  const DOCTORA = "DRA. MA. DEL ROCIO BLANCO GARCIA";
-
-
-
-  
-  const getBase64Logo = async () => {
-    try {
-      const asset = Asset.fromModule(require('../assets/images/logo.png'));
-      await asset.downloadAsync();
-
-      const base64 = await FileSystem.readAsStringAsync(asset.localUri!, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      return `data:image/png;base64,${base64}`;
-    } catch (error) {
-      console.log('Error logo:', error);
-      return '';
-    }
-  };
-  
-const generarPDF = async () => {
+const generarPDF = useCallback(async () => {
   try {
 
     console.log('1. Iniciando generación');
@@ -294,7 +288,7 @@ ${tratamientosValidos.map((t: any) => `
     console.log('ERROR REAL PDF:', error);
     Alert.alert('Error', 'No se pudo generar el PDF');
   }
-};
+}, [paciente, tratamientos, guardarPresupuesto]);
 
       const compartirPDF = async () => {
         try {
@@ -324,8 +318,10 @@ ${tratamientosValidos.map((t: any) => `
 
    
     useEffect(() => {
+      if (generacionIniciada.current) return;
+      generacionIniciada.current = true;
       generarPDF();
-    }, []);
+    }, [generarPDF]);
 
 
       const total = tratamientos.reduce(

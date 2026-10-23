@@ -25,7 +25,7 @@ export default function Buscar() {
     const abrirPDF = async (pdfUri: string) => {
       try {
         await Sharing.shareAsync(pdfUri);
-      } catch (error) {
+      } catch {
         Alert.alert('Error', 'No se pudo abrir el PDF');
       }
     };

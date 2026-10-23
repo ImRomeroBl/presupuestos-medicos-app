@@ -1,7 +1,19 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { MotiView } from "moti";
+import { MotiView, type MotiTransitionProp } from "moti";
 import { useState } from "react";
 import { Pressable, Text } from "react-native";
+
+// Moti 0.30 tipa `transition` de forma incompatible con RN 0.88.
+// El objeto es válido en runtime; el cast mantiene el tipado sin usar `any`.
+const PRESS_TRANSITION = {
+  type: "timing",
+  duration: 120,
+} as MotiTransitionProp;
+
+const GLOW_TRANSITION = {
+  type: "timing",
+  duration: 200,
+} as MotiTransitionProp;
 
 export default function GradientButton({
   title,
@@ -30,10 +42,7 @@ export default function GradientButton({
         animate={{
           scale: pressed ? 0.97 : 1,
         }}
-        transition={{
-          type: "timing",
-          duration: 120,
-        }}
+        transition={PRESS_TRANSITION}
       >
         {/* Glow */}
         <MotiView
@@ -41,10 +50,7 @@ export default function GradientButton({
             opacity: pressed ? 0.4 : 0.2,
             scale: pressed ? 0.98 : 1,
           }}
-          transition={{
-            type: "timing",
-            duration: 200,
-          }}
+          transition={GLOW_TRANSITION}
           style={{
             position: "absolute",
             width: "100%",

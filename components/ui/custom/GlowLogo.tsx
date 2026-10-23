@@ -1,7 +1,21 @@
 import { useFocusEffect } from 'expo-router';
-import { MotiView } from "moti";
+import { MotiView, type MotiTransitionProp } from "moti";
 import { useCallback, useEffect, useState } from "react";
 import { Image, View } from "react-native";
+
+// Moti 0.30 tipa `transition` de forma incompatible con RN 0.88.
+// El objeto es válido en runtime; el cast mantiene el tipado sin usar `any`.
+const AURA_TRANSITION = {
+  type: "timing",
+  duration: 2200,
+  loop: true,
+} as MotiTransitionProp;
+
+const SECONDARY_AURA_TRANSITION = {
+  type: "timing",
+  duration: 3000,
+  loop: true,
+} as MotiTransitionProp;
 
 export default function GlowLogo() {
   const [mounted, setMounted] = useState(false);
@@ -29,11 +43,7 @@ export default function GlowLogo() {
             ? { scale: 1.3, opacity: 0.1 }
             : { scale: 0.9, opacity: 0.4 }
         }
-        transition={{
-          loop: true,
-          type: "timing",
-          duration: 2200,
-        }}
+        transition={AURA_TRANSITION}
         style={{
           position: "absolute",
           width: 180,
@@ -51,11 +61,7 @@ export default function GlowLogo() {
             ? { scale: 1.6, opacity: 0.05 }
             : { scale: 1, opacity: 0.25 }
         }
-        transition={{
-          loop: true,
-          type: "timing",
-          duration: 3000,
-        }}
+        transition={SECONDARY_AURA_TRANSITION}
         style={{
           position: "absolute",
           width: 240,
