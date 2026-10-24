@@ -1,9 +1,9 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { calcularTotal } from '../domain/calculos';
 import { formatDate } from '../lib/date';
+import { presupuestoRepository } from '../services/storage/presupuestoRepository';
 import type {
   Paciente,
   Presupuesto,
@@ -33,79 +33,99 @@ export function PresupuestoProvider({ children }: { children: ReactNode }) {
   const [tratamientos, setTratamientos] = useState<Tratamiento[]>([]);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  // 🔹 CARGAR AL INICIAR
+  // Hidratación inicial: una sola lectura y ningún guardado hasta terminar.
   useEffect(() => {
-    cargarDatos();
+    let cancelado = false;
+
+    const hidratar = async () => {
+      try {
+        const almacenados = await presupuestoRepository.load();
+        if (cancelado) return;
+
+        // Si el usuario alcanzó a crear algo antes de hidratar, se conserva.
+        setPresupuestos((previos) =>
+          presupuestoRepository.merge(almacenados, previos)
+        );
+        setIsHydrated(true);
+      } catch (error) {
+        // No marcar hidratado si la lectura falla: así nunca se sobrescribe
+        // el almacenamiento con un arreglo vacío.
+        console.log('Error cargando presupuestos', error);
+      }
+    };
+
+    hidratar();
+
+    return () => {
+      cancelado = true;
+    };
   }, []);
 
-  const cargarDatos = async () => {
-    try {
-      const data = await AsyncStorage.getItem('presupuestos');
-      if (data) {
-        const parsed: unknown = JSON.parse(data);
-        if (Array.isArray(parsed)) {
-          setPresupuestos(parsed as Presupuesto[]);
-        }
-      }
-    } catch (error) {
-      console.log('Error cargando datos', error);
-    }
-  };
-
-  // 🔹 GUARDAR SIEMPRE (incluso vacío)
+  // Persistencia: solo después de una hidratación exitosa.
   useEffect(() => {
-    guardarEnStorage(presupuestos);
-  }, [presupuestos]);
+    if (!isHydrated) return;
 
-  const guardarEnStorage = async (data: Presupuesto[]) => {
-    try {
-      await AsyncStorage.setItem('presupuestos', JSON.stringify(data));
-    } catch (error) {
-      console.log('Error guardando', error);
-    }
-  };
+    presupuestoRepository.save(presupuestos).catch((error) => {
+      console.log('Error guardando presupuestos', error);
+    });
+  }, [isHydrated, presupuestos]);
 
   const resetPresupuesto = useCallback(() => {
     setPaciente({ nombre: '', edad: '' });
     setTratamientos([]);
+    setEditandoId(null);
   }, []);
 
-  // 🔥 GUARDAR / ACTUALIZAR PRESUPUESTO
-  const guardarPresupuesto = (pdfUri: string) => {
+  // Upsert estricto por id: nunca se busca por nombre del paciente.
+  const guardarPresupuesto = useCallback(
+    (pdfUri: string) => {
+      const id =
+        editandoId ??
+        presupuestoRepository.createId(
+          presupuestos.map((presupuesto) => presupuesto.id)
+        );
 
-    // Solo los tratamientos válidos participan en el total.
-    const total = calcularTotal(tratamientos);
+      const nuevo: Presupuesto = {
+        id,
+        paciente,
+        tratamientos,
+        total: calcularTotal(tratamientos),
+        fecha: formatDate(),
+        pdf: pdfUri
+      };
 
-    // 🔍 BUSCAR SI YA EXISTE ESTE PACIENTE
-    const existente = presupuestos.find(
-      (p) => p.paciente.nombre === paciente.nombre
-    );
-
-    const nuevo: Presupuesto = {
-      id: existente?.id || Date.now().toString(),
-      paciente,
-      tratamientos,
-      total,
-      fecha: formatDate(),
-      pdf: pdfUri
-    };
-
-    if (existente) {
-      // 🔁 ACTUALIZA
-      setPresupuestos(prev =>
-        prev.map(p => (p.id === existente.id ? nuevo : p))
+      setPresupuestos((previos) =>
+        presupuestoRepository.upsert(previos, nuevo)
       );
-    } else {
-      // ➕ CREA NUEVO
-      setPresupuestos(prev => [...prev, nuevo]);
-    }
-  };
+      setEditandoId(id);
+    },
+    [editandoId, paciente, presupuestos, tratamientos]
+  );
 
-  // 🔥 ELIMINAR PRESUPUESTO
-  const eliminarPresupuesto = (id: string) => {
-    setPresupuestos(prev => prev.filter(p => p.id !== id));
-  };
+  const eliminarPresupuesto = useCallback(
+    (id: string) => {
+      const objetivo = presupuestos.find(
+        (presupuesto) => presupuesto.id === id
+      );
+
+      if (objetivo?.pdf) {
+        presupuestoRepository.deletePdf(objetivo.pdf).catch((error) => {
+          console.log('Error eliminando PDF', error);
+        });
+      }
+
+      setPresupuestos((previos) =>
+        presupuestoRepository.remove(previos, id)
+      );
+
+      if (editandoId === id) {
+        setEditandoId(null);
+      }
+    },
+    [editandoId, presupuestos]
+  );
 
   return (
     <PresupuestoContext.Provider value={{
@@ -114,6 +134,7 @@ export function PresupuestoProvider({ children }: { children: ReactNode }) {
       tratamientos,
       setTratamientos,
       presupuestos,
+      isHydrated,
       guardarPresupuesto,
       eliminarPresupuesto,
       resetPresupuesto,

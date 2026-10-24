@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
 
 import {
@@ -14,6 +13,7 @@ import {
 import { usePresupuesto } from '../src/context/PresupuestoContext';
 import { calcularTotal } from '../src/domain/calculos';
 import { formatCurrency } from '../src/lib/currency';
+import { sharePresupuestoPdf } from '../src/services/pdf/sharePresupuestoPdf';
 import type { Presupuesto } from '../src/types';
 
 export default function Buscar() {
@@ -25,13 +25,42 @@ export default function Buscar() {
     p.paciente.nombre.toLowerCase().includes(busqueda.toLowerCase())
   );
 
-    const abrirPDF = async (pdfUri: string) => {
-      try {
-        await Sharing.shareAsync(pdfUri);
-      } catch {
-        Alert.alert('Error', 'No se pudo abrir el PDF');
+  const abrirPDF = async (pdfUri: string) => {
+    try {
+      const resultado = await sharePresupuestoPdf(pdfUri);
+
+      if (resultado === 'missing-uri') {
+        Alert.alert(
+          'PDF no disponible',
+          'Este presupuesto se guardó sin PDF. Edítalo y genera uno nuevo.'
+        );
+        return;
       }
-    };
+
+      if (resultado === 'not-found') {
+        Alert.alert('Error', 'El archivo PDF no existe');
+        return;
+      }
+
+      if (resultado === 'invalid-uri' || resultado === 'unreadable') {
+        Alert.alert(
+          'PDF no disponible',
+          'El archivo PDF no es accesible. Edita el presupuesto y genera uno nuevo.'
+        );
+        return;
+      }
+
+      if (resultado === 'sharing-unavailable') {
+        Alert.alert(
+          'Error',
+          'Compartir no está disponible en este dispositivo'
+        );
+      }
+    } catch (error) {
+      console.error('Error abriendo PDF:', error);
+      Alert.alert('Error', 'No se pudo abrir el PDF');
+    }
+  };
 
   const confirmarEliminar = (id: string) => {
     Alert.alert(

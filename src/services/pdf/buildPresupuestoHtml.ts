@@ -36,6 +36,10 @@ export function buildPresupuestoHtml({
   logoDataUri,
   fecha,
 }: BuildPresupuestoHtmlInput): string {
+  const logoHtml = logoDataUri
+    ? `<img class="logo" src="${escapeHtml(logoDataUri)}" />`
+    : '';
+
   const filas = tratamientosValidos
     .map(
       (tratamiento) => `
@@ -183,7 +187,7 @@ body {
     <div class="clinica">${escapeHtml(clinica.nombre)}</div>
     <div class="doctora">${escapeHtml(clinica.doctora)}</div>
   </div>
-  <img class="logo" src="${escapeHtml(logoDataUri)}" />
+  ${logoHtml}
 </div>
 
 <div class="info">

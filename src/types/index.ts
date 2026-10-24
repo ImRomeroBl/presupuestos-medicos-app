@@ -34,6 +34,7 @@ export interface PresupuestoContextValue {
   tratamientos: Tratamiento[];
   setTratamientos: Dispatch<SetStateAction<Tratamiento[]>>;
   presupuestos: Presupuesto[];
+  isHydrated: boolean;
   guardarPresupuesto: (pdfUri: string) => void;
   eliminarPresupuesto: (id: string) => void;
   resetPresupuesto: () => void;

@@ -31,36 +31,58 @@ export default function Resumen() {
 
   const generarPDF = useCallback(async (): Promise<string | null> => {
     try {
-      const error = validarPresupuesto(paciente, tratamientos);
-      if (error) {
-        Alert.alert('Error', MENSAJES_ERROR[error]);
-        return null;
-      }
-
       const { tratamientosValidos, total } = calcularTotales(tratamientos);
       const logoDataUri = await getLogoDataUri();
 
-      const html = buildPresupuestoHtml({
-        paciente,
-        tratamientosValidos,
-        total,
-        clinica: CLINICA,
-        logoDataUri,
-        fecha: new Date(),
-      });
+      const buildHtml = (logo: string) =>
+        buildPresupuestoHtml({
+          paciente,
+          tratamientosValidos,
+          total,
+          clinica: CLINICA,
+          logoDataUri: logo,
+          fecha: new Date(),
+        });
 
-      const { uri } = await generatePresupuestoPdf({
-        html,
-        patientName: paciente.nombre,
-      });
+      let uri: string;
+
+      try {
+        const resultado = await generatePresupuestoPdf({
+          html: buildHtml(logoDataUri),
+          patientName: paciente.nombre,
+        });
+        uri = resultado.uri;
+      } catch (error) {
+        if (!logoDataUri) {
+          throw error;
+        }
+
+        console.error(
+          '[Resumen] Falló la generación con logo; reintentando sin logo:',
+          error
+        );
+
+        const resultado = await generatePresupuestoPdf({
+          html: buildHtml(''),
+          patientName: paciente.nombre,
+        });
+        uri = resultado.uri;
+      }
 
       setPdfUri(uri);
       setPdfGenerado(true);
 
       return uri;
     } catch (error) {
-      console.log('ERROR REAL PDF:', error);
-      Alert.alert('Error', 'No se pudo generar el PDF');
+      console.error(
+        '[Resumen] Error generando PDF; el presupuesto se guardará sin PDF:',
+        error
+      );
+      Alert.alert(
+        'Error',
+        'No se pudo generar el PDF. El presupuesto se guardará sin PDF.'
+      );
+      setPdfGenerado(true);
       return null;
     }
   }, [paciente, tratamientos]);
@@ -74,12 +96,33 @@ export default function Resumen() {
         return;
       }
 
+      if (resultado === 'invalid-uri') {
+        Alert.alert('Error', 'La ruta del PDF no es válida');
+        return;
+      }
+
       if (resultado === 'not-found') {
         Alert.alert('Error', 'El archivo no existe');
         return;
       }
+
+      if (resultado === 'unreadable') {
+        Alert.alert(
+          'Error',
+          'El archivo PDF no es accesible. Vuelve a generarlo.'
+        );
+        return;
+      }
+
+      if (resultado === 'sharing-unavailable') {
+        Alert.alert(
+          'Error',
+          'Compartir no está disponible en este dispositivo'
+        );
+        return;
+      }
     } catch (error) {
-      console.log('💥 ERROR SHARE:', error);
+      console.error('[PDF] Error compartiendo el presupuesto:', error);
       Alert.alert('Error', 'No se pudo compartir');
     }
   };
@@ -89,16 +132,28 @@ export default function Resumen() {
     generacionIniciada.current = true;
 
     const generarYGuardar = async () => {
+      const error = validarPresupuesto(paciente, tratamientos);
+      if (error) {
+        Alert.alert('Error', MENSAJES_ERROR[error]);
+        return;
+      }
+
       const uri = await generarPDF();
 
-      if (uri) {
-        // La persistencia es una decisión de la pantalla, no del servicio PDF.
-        guardarPresupuesto(uri);
+      try {
+        // La persistencia no depende de que el PDF se haya generado.
+        // Si falla el PDF, se guarda el presupuesto con pdf: ''.
+        guardarPresupuesto(uri ?? '');
+      } catch (persistError) {
+        console.error(
+          '[Resumen] Error guardando el presupuesto:',
+          persistError
+        );
       }
     };
 
     generarYGuardar();
-  }, [generarPDF, guardarPresupuesto]);
+  }, [generarPDF, guardarPresupuesto, paciente, tratamientos]);
 
   const { total } = calcularTotales(tratamientos);
 
